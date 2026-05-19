@@ -2,6 +2,7 @@
 import curses
 import csv
 import json
+import os
 import time
 from datetime import datetime
 from pathlib import Path
@@ -9,24 +10,48 @@ from pathlib import Path
 import requests
 
 
-URL = "http://localhost:8080/v1/chat/completions"
-CSV_FILE = Path("chat_benchmark.csv")
+
+
+def _env_float(name, default):
+    value = os.getenv(name)
+    if value in (None, ""):
+        return default
+    try:
+        return float(value)
+    except ValueError:
+        return default
+
+
+def _env_int(name, default):
+    value = os.getenv(name)
+    if value in (None, ""):
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        return default
+
+
+URL = os.getenv("INFERENCE_URL", "http://localhost:8080/v1/chat/completions")
+CSV_FILE = Path(os.getenv("CSV_FILE", "chat_benchmark.csv"))
 
 PAYLOAD = {
-    "model": "qwen3.6-35b-a3b-q5",
+    "model": os.getenv("MODEL_NAME", "qwen3.6-35b-a3b-q5"),
     "messages": [
         {
             "role": "user",
-            "content": "Привет. Кратко объясни, что ты умеешь."
+            "content": os.getenv("PROMPT_CONTENT", "Привет. Кратко объясни, что ты умеешь."),
         }
     ],
-    "max_tokens": 256,
-    "temperature": 0.6,
+    "max_tokens": _env_int("MAX_TOKENS", 256),
+    "temperature": _env_float("TEMPERATURE", 0.6),
 }
 
 HEADERS = {
-    "Content-Type": "application/json"
+    "Content-Type": os.getenv("CONTENT_TYPE", "application/json")
 }
+
+REQUEST_TIMEOUT_SECONDS = _env_int("REQUEST_TIMEOUT_SECONDS", 120)
 
 CSV_FIELDS = [
     "timestamp",
@@ -121,7 +146,7 @@ def run_test():
             URL,
             headers=HEADERS,
             data=json.dumps(PAYLOAD, ensure_ascii=False).encode("utf-8"),
-            timeout=120,
+            timeout=REQUEST_TIMEOUT_SECONDS,
         )
 
         latency_ms = (time.perf_counter() - started) * 1000
